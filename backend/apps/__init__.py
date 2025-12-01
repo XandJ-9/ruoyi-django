@@ -1,0 +1,4 @@
+apps = [
+    'datasource',
+    'system',
+]

@@ -388,3 +388,56 @@ export function isNumberStr(str) {
   return /^[+-]?(0|([1-9]\d*))(\.\d+)?$/g.test(str)
 }
  
+
+// 通用函数：根据字符串内容计算表格列宽度
+export function calculateColumnWidth(str, options = {}) {
+  if (!str) return options.minWidth || 100;
+  
+  const {
+    minWidth = 100,    // 最小宽度
+    maxWidth = 500,    // 最大宽度
+    padding = 30,      // 内边距
+    charWidths = {     // 不同字符类型的宽度
+      default: 7,      // 默认字符宽度
+      chinese: 14,     // 中文字符宽度
+      number: 9,       // 数字字符宽度
+      uppercase: 9,    // 大写字母宽度
+      lowercase: 7,    // 小写字母宽度
+      symbol: 7        // 符号宽度
+    }
+  } = options;
+  
+  // 计算字符串总宽度
+  let totalWidth = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const code = char.charCodeAt(0);
+    
+    // 中文字符范围
+    if (code >= 0x4E00 && code <= 0x9FFF) {
+      totalWidth += charWidths.chinese;
+    }
+    // 数字
+    else if (code >= 48 && code <= 57) {
+      totalWidth += charWidths.number;
+    }
+    // 大写字母
+    else if (code >= 65 && code <= 90) {
+      totalWidth += charWidths.uppercase;
+    }
+    // 小写字母
+    else if (code >= 97 && code <= 122) {
+      totalWidth += charWidths.lowercase;
+    }
+    // 其他符号
+    else {
+      totalWidth += charWidths.symbol;
+    }
+  }
+  
+  // 添加内边距
+  totalWidth += padding;
+  
+  // 确保宽度在最小值和最大值之间
+  return Math.min(Math.max(totalWidth, minWidth), maxWidth);
+}

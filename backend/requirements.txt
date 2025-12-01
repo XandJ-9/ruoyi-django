@@ -1,5 +1,7 @@
 asgiref==3.10.0
 attrs==25.4.0
+cffi==2.0.0
+cryptography==46.0.3
 Django==5.2.8
 django-ranged-response==0.2.0
 django-simple-captcha==0.6.2
@@ -10,7 +12,10 @@ inflection==0.5.1
 jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 pillow==12.0.0
+psycopg2==2.9.11
+pycparser==2.23
 PyJWT==2.10.1
+PyMySQL==1.1.2
 PyYAML==6.0.3
 referencing==0.37.0
 rpds-py==0.29.0

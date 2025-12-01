@@ -3,6 +3,7 @@
     <el-row :gutter="20">
       <splitpanes :horizontal="appStore.device === 'mobile'" class="default-theme">
         <!--部门数据-->
+        <!---
         <pane size="16">
           <el-col>
             <div class="head-container">
@@ -13,6 +14,7 @@
             </div>
           </el-col>
         </pane>
+      -->
         <!--用户数据-->
         <pane size="84">
           <el-col>
@@ -353,7 +355,7 @@ function resetQuery() {
 
 /** 删除按钮操作 */
 function handleDelete(row) {
-  const userIds = row.userId || ids.value.join(',')
+  const userIds = ''+row.userId || ids.value.join(',')
   proxy.$modal.confirm('是否确认删除用户编号为"' + userIds + '"的数据项？').then(function () {
     return delUser(userIds)
   }).then(() => {

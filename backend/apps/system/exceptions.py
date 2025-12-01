@@ -51,7 +51,7 @@ def custom_exception_handler(exc, context):
         msg = "无法删除:该条数据与其他数据有相关绑定"
     elif isinstance(exc, DatabaseError):
         set_rollback()
-        msg = "接口服务器异常,请联系管理员" + str(exc)
+        msg = "数据库错误:" + str(exc)
     elif isinstance(exc, Exception):
         msg = str(exc)
     # Non-DRF or unhandled exceptions → 500

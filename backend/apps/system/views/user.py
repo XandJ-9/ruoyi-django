@@ -174,7 +174,7 @@ class UserViewSet(BaseViewSet):
                 role_data['flag'] = role.role_id in user_roles
                 roles_data.append(role_data)
             
-            return self.data({'user': UserSerializer(user).data, 'roles': roles_data})
+            return self.raw_response({'user': UserSerializer(user).data, 'roles': roles_data})
         except User.DoesNotExist:
             return self.not_found('用户不存在')
     
@@ -182,7 +182,7 @@ class UserViewSet(BaseViewSet):
     @audit_log
     @extend_schema(request=AuthRoleAssignSerializer)
     def updateAuthRole(self, request):
-        v = AuthRoleAssignSerializer(data=request.data)
+        v = AuthRoleAssignSerializer(data=request.query_params)
         v.is_valid(raise_exception=True)
         user_id = v.validated_data['userId']
         role_ids = v.validated_data.get('roleIds', [])

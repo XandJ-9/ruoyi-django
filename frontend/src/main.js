@@ -28,6 +28,7 @@ import './permission' // permission control
 import { useDict } from '@/utils/dict'
 import { getConfigKey } from "@/api/system/config"
 import { parseTime, resetForm, addDateRange, handleTree, selectDictLabel, selectDictLabels } from '@/utils/ruoyi'
+import { calculateColumnWidth } from '@/utils/index.js'
 
 // 分页组件
 import Pagination from '@/components/Pagination'
@@ -56,6 +57,7 @@ app.config.globalProperties.addDateRange = addDateRange
 app.config.globalProperties.getConfigKey = getConfigKey
 app.config.globalProperties.selectDictLabel = selectDictLabel
 app.config.globalProperties.selectDictLabels = selectDictLabels
+app.config.globalProperties.calculateColumnWidth = calculateColumnWidth
 
 // 全局组件挂载
 app.component('DictTag', DictTag)

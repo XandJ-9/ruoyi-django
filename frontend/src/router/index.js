@@ -83,6 +83,20 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  // 数据源管理（隐藏入口，独立功能路径）
+  {
+    path: '/datasource',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/datasource/index.vue'),
+        name: 'Datasource',
+        meta: { title: '数据源管理', activeMenu: '/datasource' }
+      }
+    ]
   }
 ]
 
@@ -145,6 +159,19 @@ export const dynamicRoutes = [
     ]
   },
   {
+    path: '/datasource/query',
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: 'index/:id(\\d+)?',
+        component: () => import('@/views/datasource/query'),
+        name: 'DatasourceQuery',
+        meta: { title: '数据查询' }
+      }
+    ]
+  },
+  {
     path: '/tool/gen-edit',
     component: Layout,
     hidden: true,
@@ -161,7 +188,13 @@ export const dynamicRoutes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+    // 部署生产环境和开发环境下的URL。
+    // 默认情况下，vite 会假设你的应用是被部署在一个域名的根路径上
+    // 例如 https://www.foo.com/
+    // 如果应用被部署在一个子路径上，你就需要用这个选项指定这个子路径
+    // 例如，如果你的应用被部署在 https://www.foo.com/bar/
+    // 则设置 baseUrl 为 /bar/
+  history: createWebHistory(import.meta.env.VITE_APP_BASE_URL),
   routes: constantRoutes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {

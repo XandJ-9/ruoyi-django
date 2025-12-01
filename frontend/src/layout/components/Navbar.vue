@@ -66,6 +66,9 @@ import RuoYiDoc from '@/components/RuoYi/Doc'
 import useAppStore from '@/store/modules/app'
 import useUserStore from '@/store/modules/user'
 import useSettingsStore from '@/store/modules/settings'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const appStore = useAppStore()
 const userStore = useUserStore()
@@ -95,7 +98,8 @@ function logout() {
     type: 'warning'
   }).then(() => {
     userStore.logOut().then(() => {
-      location.href = '/index'
+      // location.href = '/index'
+      router.replace('/login')
     })
   }).catch(() => { })
 }

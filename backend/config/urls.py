@@ -18,10 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from apps.system.views import LoginView, CaptchaView, GetInfoView, LogoutView, GetRoutersView
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('', include('system.urls')),
+    # path('admin/', admin.site.urls),
+    path('system/', include('apps.system.urls')),
+    path('datasource/', include('apps.datasource.urls')),
     path('captcha/', include('captcha.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('login', LoginView.as_view(), name='login'),
+    path('captchaImage/', CaptchaView.as_view(), name='captcha-image'),
+    path('getInfo', GetInfoView.as_view(), name='get-info'),
+    path('logout', LogoutView.as_view(), name='logout'),
+    path('getRouters', GetRoutersView.as_view(), name='get-routers'),
 ]
