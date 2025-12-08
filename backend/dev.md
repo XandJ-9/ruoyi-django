@@ -1,0 +1,231 @@
+# 后端开发规范
+
+- 技术栈：Django 5.x + Django REST framework（DRF） + Simple JWT
+- 项目位置：`backend/`
+- 已开发模块：`system`（用户、菜单、字典、认证相关）
+- 统一风格：前端为 RuoYi 风格，接口返回采用包裹结构（`code`、`msg`、`data`/`rows`/`total`），异常统一包装
+
+## 目录结构
+
+### 项目根目录
+- 总体结构
+  - `backend/config/`：项目配置（`settings.py`、`urls.py`、`wsgi.py`、`asgi.py`）
+  - `backend/system/`：业务应用（模型、序列化、视图、路由、异常、命令、迁移）
+- `system` 模块示例
+  - `models.py`：实体模型（用户、部门、角色、菜单、字典）
+  - `serializers.py`：序列化定义（字段映射为驼峰）
+  - `views/`：`core.py`（认证、基础信息、路由生成）、`user.py`（用户与扩展动作）、`menu.py`（菜单）、`dict.py`（字典类型与数据）
+  - `urls.py`：DRF `DefaultRouter` + 认证路由
+  - `exceptions.py`：DRF 异常统一处理
+  - `management/commands/init_menus.py`：初始化菜单命令
+  - `migrations/`：数据迁移
+
+### 模块结构规范
+
+- 每个业务模块（Django app）应包含：
+  - `models.py`：模型定义，字段完整、含 `Meta`（`db_table`、`verbose_name`）
+  - `serializers.py`：输出为驼峰命名；输入校验与业务约束分离
+  - `views/*.py`：按资源拆分视图，使用 `ModelViewSet`；分页、筛选、排序、软删除
+  - `urls.py`：使用 `DefaultRouter`，设定 `router.trailing_slash='/?'` 保持路径兼容
+  - 可选：`management/commands/*.py`（初始化数据、批处理）、`permissions.py`（细粒度权限）
+
+## REST 与返回规范
+
+- 统一响应格式
+  ```python
+      # 通用响应封装
+    def ok(self, msg='操作成功'):
+        return Response({'code': 200, 'msg': msg})
+
+    def error(self, msg='操作失败'):
+        return Response({'code': 400, 'msg': msg}, status=status.HTTP_400_BAD_REQUEST)
+    
+    def data(self, data, msg='操作成功'):
+        return Response({'code': 200, 'msg': msg, 'data': data})
+
+    def not_found(self, msg='未找到'):
+        return Response({'code': 404, 'msg': msg}, status=status.HTTP_404_NOT_FOUND)
+    
+    def raw_response(self, data):
+        return Response(data)
+    ```
+  - 列表：
+    ```python
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return self.raw_response({'total': len(serializer.data), 'rows': serializer.data, 'code': 200, 'msg': '操作成功'})
+    ```
+  - 详情：
+    ```python
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        data = self.get_serializer(instance).data
+        return self.data(data)
+    ```
+  - 新增：
+    ```python
+    @audit_log
+    def create(self, request, *args, **kwargs):
+        data = normalize_input(request.data)
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return self.ok()
+    ```
+  - 修改：
+    ```python
+    @audit_log
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        data = normalize_input(request.data)
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return self.ok()
+    ```
+  - 路由：
+    ```python
+    class GetRoutersView(APIView):
+        def get(self, request):
+            routers = ...
+            return Response({'code': 200, 'msg': '操作成功', 'data': routers})
+    ```
+- 统一错误包装
+  - 全局异常处理：在 `config.settings` 的 `REST_FRAMEWORK` 中设置 `EXCEPTION_HANDLER = 'system.exceptions.custom_exception_handler'`
+  - 行为：
+    - DRF 处理的异常 → HTTP 200，包裹为 `{"code": <status_int>, "message": <first_error>}`
+    - 未处理异常 → HTTP 500，`{"code": 500, "message": "服务器内部错误"}`
+- 分页与查询
+  - 分页参数：`pageNum`（默认 1）、`pageSize`（默认 10）
+  - 返回：`total` + `rows`
+- 路径与方法约定
+  - 列表：`GET /system/<resource>` 或兼容 `GET /system/<resource>/list`
+  - 详情：`GET /system/<resource>/{id}`
+  - 新增：`POST /system/<resource>`
+  - 修改：`PUT /system/<resource>`
+  - 删除：`DELETE /system/<resource>/{id}`
+  - 扩展动作：`@action(detail=False/True, methods=['get'|'put'|'delete'...])`
+
+## 公共基类与工具
+
+- 模型基类（`system.models.BaseModel`）
+  - 公共字段：`create_by`、`update_by`、`create_time`、`update_time`、`del_flag`
+  - 特性：`abstract = True`，所有业务模型统一继承；各模型在 `Meta.indexes` 中定义常用索引
+  - 当前继承模型：`User`、`Dept`、`Role`、`Menu`、`DictType`、`DictData`、`UserRole`、`RoleMenu`、`Config`
+
+- 序列化基类（`system.serializers.BaseModelSerializer`）
+  - 作用：为所有模型序列化提供统一的审计/状态字段输出，统一驼峰命名
+  - 自动合并字段（加入子类 `Meta.fields`）：`createBy`、`updateBy`、`createTime`、`updateTime`、`remark`、`status`
+  - 用法：所有面向模型的序列化类直接继承 `BaseModelSerializer`
+
+- 查询参数基类（`system.serializers.PaginationQuerySerializer`）
+  - 字段：`pageNum`（默认 1）、`pageSize`（默认 10），均允许缺省
+  - 用法：各资源的 `*QuerySerializer` 继承之（如 `UserQuerySerializer`、`RoleQuerySerializer`、`MenuQuerySerializer`、`DeptQuerySerializer`、`DictTypeQuerySerializer`、`DictDataQuerySerializer`、`ConfigQuerySerializer`、`AuthRoleQuerySerializer`）
+
+- 视图基类（`system.views.core.BaseViewSet`）
+  - 统一响应方法：`ok()`、`error()`、`data()`、`not_found()`
+  - 统一增改逻辑：创建/更新自动注入 `create_by/update_by`；集合更新支持 `update_by_body`
+  - 统一分页：调用全局分页类；统一列表分页响应封装
+  - 可配置属性：`update_body_serializer_class`（集合更新体校验类）、`update_body_id_field`（集合更新主键字段名）
+
+- 权限（`system.permission.HasRolePermission`）
+  - 支持在视图上声明 `required_roles`；当为空时默认放行
+  - 基于 `UserRole.role.role_key` 校验；内置管理员角色 `admin` 兜底放行
+
+- 异常处理（`system.exceptions.custom_exception_handler`）
+  - 全局统一包装错误为 `{code, message}`，优先提取 `detail` 或首个字段错误
+  - 未捕获异常统一返回 `500`，`message = '服务器内部错误'`
+
+- 分页（`system.pagination.StandardPagination`）
+  - 请求参数：`pageNum`、`pageSize`；最大页大小 `100`
+  - 返回结构：`{'code': 200, 'msg': '操作成功', 'total': <count>, 'rows': <data>}`
+
+- 通用工具（`system.common.py`）
+  - `audit_log`：接口审计日志装饰器（记录用户名、方法、路径）
+  - 命名转换：`camel_to_snake`、`snake_to_camel`、`camelize_dict`、`decamelize_dict`
+  - 入参规范化：`normalize_input`（将驼峰键转下划线，便于模型字段匹配）
+
+## 全局设置（config/settings.py）
+
+- `REST_FRAMEWORK`
+  - `DEFAULT_AUTHENTICATION_CLASSES = ('rest_framework_simplejwt.authentication.JWTAuthentication',)`
+  - `EXCEPTION_HANDLER = 'system.exceptions.custom_exception_handler'`
+  - `DEFAULT_PAGINATION_CLASS = 'system.pagination.StandardPagination'`
+  - `PAGE_SIZE = 10`
+  - `DEFAULT_SCHEMA_CLASS = 'drf_spectacular.openapi.AutoSchema'`
+
+- `SIMPLE_JWT`
+  - `ACCESS_TOKEN_LIFETIME = 8h`
+  - `REFRESH_TOKEN_LIFETIME = 1d`
+
+- 其他关键设置
+  - `AUTH_USER_MODEL = 'system.User'`
+  - `APPEND_SLASH = False`（路由尾斜杠兼容由 `router.trailing_slash='/?'` 实现）
+  - 数据库：开发环境使用 SQLite（`db.sqlite3`）
+
+## 统一约定
+
+- 输出命名统一使用驼峰（camelCase）；输入参数支持驼峰，内部转换为下划线（snake_case）
+- 模型序列化类统一继承 `BaseModelSerializer`；查询参数类统一继承 `PaginationQuerySerializer`；更新请求体类继承 `serializers.Serializer`
+- 视图集统一继承 `BaseViewSet`，声明 `serializer_class`、`queryset`、必要的 `update_body_*` 属性
+- 软删除约定
+  - 有 `del_flag` 的资源均采用软删除（置 `del_flag='1'`），查询统一过滤 `del_flag='0'`（参考：`Menu`、`DictType`、`DictData`）
+- 驼峰输出
+  - 所有对前端的输出按驼峰命名，使用 `source` 进行字段映射（参考 `MenuSerializer`）
+- 列表别名
+  - 兼容前端 `/list` 风格：在视图集添加 `@action(detail=False, methods=['get'], url_path='list')`（如 `DictTypeViewSet.list_action`、`DictDataViewSet.list_action`）并复用 `list()`
+- 权限与鉴权
+  - 默认所有系统接口需登录；登录、验证码接口除外
+- 统一日志
+  - 在 `list/create/update/destroy` 等关键操作处记录审计字段（`create_by/update_by`），从 `request.user` 注入
+
+## 认证与权限
+
+- 认证方式
+  - JWT：`DEFAULT_AUTHENTICATION_CLASSES = ('rest_framework_simplejwt.authentication.JWTAuthentication',)`（`config.settings`）
+- 鉴权
+  - 需登录接口：`permission_classes = [IsAuthenticated]`（示例：`GetInfoView`、`DictTypeViewSet`、`DictDataViewSet`）
+- 登录与验证码
+  - 验证码：`GET /captchaImage/` 返回 `img`（Base64）、`uuid`、`captchaEnabled`
+  - 登录：`POST /login` 返回 `{"token": <jwt_access>}`
+  - 登出：`POST /logout` 返回统一成功包
+
+## 异常处理
+
+- 统一异常入口：`system.exceptions.custom_exception_handler`（在 `config.settings.REST_FRAMEWORK` 中配置）
+- 错误信息提取：优先 `detail`，否则提取首个字段错误
+- 返回行为：
+  - DRF 异常 → HTTP 200 + `{"code": <http_status>, "message": <msg>}`
+  - 未捕获异常 → HTTP 500 + `{"code": 500, "message": "服务器内部错误"}`
+
+## 优化建议
+
+### 文档接口
+
+-  集成 `drf-spectacular`，提供接口文档：`/api/schema` 与 `/api/docs`
+
+### 权限与安全强化
+
+-  基于Role模型扩展 DRF 权限类，实现 RBAC 细粒度权限控制（如HasRolePermission），在视图中通过required_roles指定允许访问的角色；
+
+-  对登录、权限变更、数据删除等敏感操作，通过中间件或装饰器记录审计日志，包含操作用户、操作路径、方法等信息。
+
+### 性能与可维护性提升
+
+-  优化数据库查询：关联查询使用select_related/prefetch_related减少 SQL 请求；为高频过滤字段（del_flag、parent_id等）添加数据库索引；
+
+-  对字典、菜单等静态数据添加缓存（如 Django 缓存框架），设置合理过期时间（如 1 小时）以减少数据库压力；
+
+-  按业务逻辑拆分视图文件，保持views/目录清晰，避免单个文件代码冗余。
+
+### 测试与文档完善
+
+-  为核心模型、序列化器、视图编写单元测试，验证字段映射、权限控制、业务逻辑正确性；
+
+-  集成drf-spectacular生成 OpenAPI 文档，自动同步接口信息，方便前后端协作。
