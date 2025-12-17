@@ -215,9 +215,11 @@ function resetQuery() {
 
 /** 新增按钮操作 */
 function handleAdd(row) {
-  reset()
+  deptOptions.value = []
   listDept().then(response => {
-    deptOptions.value = proxy.handleTree(response.data, "deptId")
+    const dept = { deptId: 0, deptName: "根节点", children: [] }
+    dept.children = proxy.handleTree(response.data, "deptId")
+    deptOptions.value.push(dept)
   })
   if (row != undefined) {
     form.value.parentId = row.deptId

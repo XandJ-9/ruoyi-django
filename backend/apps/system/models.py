@@ -87,6 +87,38 @@ class Role(BaseModel):
         return self.role_name
 
 
+class Post(BaseModel):
+    post_id = models.AutoField(primary_key=True, verbose_name='岗位ID')
+    post_code = models.CharField(max_length=64, verbose_name='岗位编码')
+    post_name = models.CharField(max_length=50, verbose_name='岗位名称')
+    post_sort = models.IntegerField(default=0, verbose_name='显示顺序')
+    status = models.CharField(max_length=1, choices=[('0', '正常'), ('1', '停用')], default='0', verbose_name='状态')
+    remark = models.TextField(blank=True, default='', verbose_name='备注')
+
+    class Meta:
+        db_table = 'sys_post'
+        verbose_name = '岗位'
+        verbose_name_plural = '岗位'
+        indexes = [
+            models.Index(fields=['del_flag']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return self.post_name
+
+
+class UserPost(BaseModel):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, verbose_name='岗位')
+
+    class Meta:
+        db_table = 'sys_user_post'
+        verbose_name = '用户岗位关联'
+        verbose_name_plural = '用户岗位关联'
+        unique_together = ('user', 'post')
+
+
 class UserRole(BaseModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='用户')
     role = models.ForeignKey(Role, on_delete=models.CASCADE, verbose_name='角色')
@@ -207,3 +239,17 @@ class Config(BaseModel):
 
     def __str__(self):
         return f"{self.config_name}({self.config_key})"
+
+class Notice(BaseModel):
+    notice_id = models.AutoField(primary_key=True, verbose_name='公告ID')
+    notice_title = models.CharField(max_length=50, verbose_name='公告标题')
+    notice_type = models.CharField(max_length=1, choices=[('1', '通知'), ('2', '公告')], default='1', verbose_name='公告类型')
+    notice_content = models.TextField(blank=True, null=True, verbose_name='公告内容')
+    status = models.CharField(max_length=1, choices=[('0', '正常'), ('1', '关闭')], default='0', verbose_name='公告状态')
+    remark = models.CharField(max_length=255, blank=True, null=True, verbose_name='备注')
+
+    class Meta:
+        db_table = 'sys_notice'
+        verbose_name = '通知公告'
+        verbose_name_plural = '通知公告'
+        ordering = ['-create_time']

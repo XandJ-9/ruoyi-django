@@ -1,6 +1,6 @@
 from typing_extensions import Required
 from rest_framework import serializers
-from .models import User, Dept, Role, UserRole, Menu, DictType, DictData, Config
+from .models import User, Dept, Role, UserRole, Menu, DictType, DictData, Config, Post, UserPost
 from .common import snake_to_camel
 
 class CamelCaseModelSerializer(serializers.ModelSerializer):
@@ -24,7 +24,7 @@ class BaseModelSerializer(serializers.ModelSerializer):
     updateBy = serializers.CharField(source='update_by', required=False, read_only=True)
     createTime = serializers.DateTimeField(source='create_time', read_only=True, format='%Y-%m-%d %H:%M:%S')
     updateTime = serializers.DateTimeField(source='update_time', read_only=True, format='%Y-%m-%d %H:%M:%S')
-    remark = serializers.CharField(required=False, allow_blank=True)
+    remark = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     status = serializers.CharField(required=False)
 
     # 自动将公共字段并入子类 Meta.fields，避免每个子类重复声明
@@ -50,11 +50,14 @@ class UserSerializer(BaseModelSerializer):
     userName = serializers.CharField(source='username', required=False)
     nickName = serializers.CharField(source='nick_name', required=False)
     dept = serializers.SerializerMethodField()
-    deptId = serializers.IntegerField(source='dept_id')
+    deptId = serializers.IntegerField(source='dept_id', required=False, allow_null=True)
+    roleIds = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
+    postIds = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
+    password = serializers.CharField(required=False, write_only=True)
     
     class Meta:
         model = User
-        fields = ['userId', 'userName', 'nickName', 'phonenumber', 'email', 'sex', 'avatar', 'status','remark','dept','deptId']
+        fields = ['userId', 'userName', 'nickName', 'phonenumber', 'email', 'sex', 'avatar', 'status','remark','dept','deptId', 'roleIds', 'postIds', 'password']
     
     def get_dept(self, obj):
         if obj.dept_id:
@@ -68,6 +71,68 @@ class UserSerializer(BaseModelSerializer):
                 return None
         return None
 
+    def create(self, validated_data):
+        role_ids = validated_data.pop('roleIds', [])
+        post_ids = validated_data.pop('postIds', [])
+        password = validated_data.pop('password', None)
+        
+        # 处理 deptId (BaseModelSerializer 会处理普通字段，但 deptId 是映射字段)
+        # 已经在 source='dept_id' 处理了，但需要确保 validated_data 中 key 正确
+        
+        user = super().create(validated_data)
+        if password:
+            user.set_password(password)
+            user.save()
+            
+        if role_ids:
+            roles = Role.objects.filter(role_id__in=role_ids)
+            for role in roles:
+                UserRole.objects.create(user=user, role=role)
+        
+        if post_ids:
+            posts = Post.objects.filter(post_id__in=post_ids)
+            for post in posts:
+                UserPost.objects.create(user=user, post=post)
+                
+        return user
+
+    def update(self, instance, validated_data):
+        role_ids = validated_data.pop('roleIds', None)
+        post_ids = validated_data.pop('postIds', None)
+        
+        user = super().update(instance, validated_data)
+        
+        if role_ids is not None:
+            UserRole.objects.filter(user=user).delete()
+            roles = Role.objects.filter(role_id__in=role_ids)
+            for role in roles:
+                UserRole.objects.create(user=user, role=role)
+                
+        if post_ids is not None:
+            UserPost.objects.filter(user=user).delete()
+            posts = Post.objects.filter(post_id__in=post_ids)
+            for post in posts:
+                UserPost.objects.create(user=user, post=post)
+        
+        return user
+
+
+class PostSerializer(BaseModelSerializer):
+    postId = serializers.IntegerField(source='post_id', read_only=True)
+    postCode = serializers.CharField(source='post_code')
+    postName = serializers.CharField(source='post_name')
+    postSort = serializers.IntegerField(source='post_sort')
+
+    class Meta:
+        model = Post
+        fields = ['postId', 'postCode', 'postName', 'postSort']
+
+class PostUpdateSerializer(PostSerializer):
+    postId = serializers.IntegerField(source='post_id')
+
+    class Meta:
+        model = Post
+        fields = ['postId', 'postCode', 'postName', 'postSort']
 
 class UserQuerySerializer(PaginationQuerySerializer):
     userName = serializers.CharField(required=False, allow_blank=True)
@@ -77,15 +142,22 @@ class UserQuerySerializer(PaginationQuerySerializer):
     beginTime = serializers.DateTimeField(required=False)
     endTime = serializers.DateTimeField(required=False)
 
-class UserProfileSerializer(serializers.Serializer):
+class UserProfileSerializer(BaseModelSerializer):
+    userId = serializers.IntegerField(source='id', read_only=True)
+    userName = serializers.CharField(source='username', read_only=True)
+    nickName = serializers.CharField(source='nick_name')
+    phonenumber = serializers.CharField()
+    email = serializers.CharField()
+    sex = serializers.CharField()
+    avatar = serializers.CharField(read_only=True)
     dept = serializers.SerializerMethodField()
     roleIds = serializers.SerializerMethodField()
     postIds = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'nick_name', 'phonenumber', 'email', 'sex', 'avatar', 
-                 'dept_id', 'dept', 'roleIds', 'postIds']
+        fields = ['userId', 'userName', 'nickName', 'phonenumber', 'email', 'sex', 'avatar', 
+                 'dept_id', 'dept', 'roleIds', 'postIds', 'createTime']
     
     def get_dept(self, obj):
         if obj.dept_id:
@@ -103,7 +175,7 @@ class UserProfileSerializer(serializers.Serializer):
         return list(UserRole.objects.filter(user=obj).values_list('role_id', flat=True))
     
     def get_postIds(self, obj):
-        return []
+        return list(UserPost.objects.filter(user=obj).values_list('post_id', flat=True))
 
 class UserInfoSerializer(serializers.Serializer):
     userId = serializers.IntegerField()
@@ -282,13 +354,16 @@ class DictTypeQuerySerializer(PaginationQuerySerializer):
     status = serializers.ChoiceField(required=False, choices=['0','1'])
 
 class DictTypeSerializer(BaseModelSerializer):
-    dictId = serializers.IntegerField(source='dict_id')
+    dictId = serializers.IntegerField(source='dict_id', read_only=True)
     dictName = serializers.CharField(source='dict_name')
     dictType = serializers.CharField(source='dict_type')
 
     class Meta:
         model = DictType
         fields = ['dictId', 'dictName', 'dictType']
+
+class DictTypeUpdateSerializer(DictTypeSerializer):
+    dictId = serializers.IntegerField(source='dict_id')
 
 # DictData related
 class DictDataQuerySerializer(PaginationQuerySerializer):
@@ -297,7 +372,7 @@ class DictDataQuerySerializer(PaginationQuerySerializer):
     status = serializers.ChoiceField(required=False, choices=['0','1'])
 
 class DictDataSerializer(BaseModelSerializer):
-    dictCode = serializers.IntegerField(source='dict_code')
+    dictCode = serializers.IntegerField(source='dict_code', read_only=True)
     dictSort = serializers.IntegerField(source='dict_sort')
     dictLabel = serializers.CharField(source='dict_label')
     dictValue = serializers.CharField(source='dict_value')
@@ -308,6 +383,11 @@ class DictDataSerializer(BaseModelSerializer):
     class Meta:
         model = DictData
         fields = ['dictCode', 'dictSort', 'dictLabel', 'dictValue', 'dictType', 'cssClass', 'listClass']
+
+class DictDataUpdateSerializer(DictDataSerializer):
+    dictCode = serializers.IntegerField(source='dict_code')
+
+
 
 # Config related
 class ConfigQuerySerializer(PaginationQuerySerializer):

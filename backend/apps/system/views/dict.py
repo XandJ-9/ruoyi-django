@@ -7,7 +7,7 @@ from django.core.cache import cache
 from ..models import DictType, DictData
 from ..serializers import (
     DictTypeSerializer, DictDataSerializer,
-    DictTypeQuerySerializer, DictDataQuerySerializer
+    DictTypeQuerySerializer, DictDataQuerySerializer,DictTypeUpdateSerializer,DictDataUpdateSerializer
 )
 from ..permission import HasRolePermission
 from .core import BaseViewSet
@@ -17,7 +17,7 @@ class DictTypeViewSet(BaseViewSet):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = DictType.objects.filter(del_flag='0').order_by('-create_time')
     serializer_class = DictTypeSerializer
-    update_body_serializer_class = DictTypeSerializer
+    update_body_serializer_class = DictTypeUpdateSerializer
     update_body_id_field = 'dict_id'
 
     def get_queryset(self):
@@ -96,7 +96,7 @@ class DictDataViewSet(BaseViewSet):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = DictData.objects.filter(del_flag='0').order_by('-create_time')
     serializer_class = DictDataSerializer
-    update_body_serializer_class = DictDataSerializer
+    update_body_serializer_class = DictDataUpdateSerializer
     update_body_id_field = 'dict_code'
 
     def get_queryset(self):

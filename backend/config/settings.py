@@ -31,7 +31,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'drf_spectacular',
     'captcha',
-    'apps.system'
+    'apps.system',
+    'apps.monitor'
 ]
 
 MIDDLEWARE = [
@@ -69,8 +70,8 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
-    'EXCEPTION_HANDLER': 'apps.system.exceptions.custom_exception_handler',
-    'DEFAULT_PAGINATION_CLASS': 'apps.system.pagination.StandardPagination',
+    'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
+    'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.StandardPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
@@ -136,6 +137,10 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / 'dist/static'
 ]
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
