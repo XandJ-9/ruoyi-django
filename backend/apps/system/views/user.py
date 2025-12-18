@@ -136,31 +136,29 @@ class UserViewSet(BaseViewSet):
         tree_data = build_tree(mapped)
         return self.data(tree_data)
     
-    @action(detail=False, methods=['get', 'put'])
+    @action(detail=False, methods=['get'], url_path=r'profile')
     def profile(self, request):
         user = request.user
+        serializer = UserProfileSerializer(user)
+        # 获取用户所属的角色组和岗位组名称
+        role_names = list(UserRole.objects.filter(user=user).values_list('role__role_name', flat=True))
+        post_names = list(UserPost.objects.filter(user=user).values_list('post__post_name', flat=True))
         
-        if request.method == 'GET':
-            serializer = UserProfileSerializer(user)
-            # 获取用户所属的角色组和岗位组名称
-            role_names = list(UserRole.objects.filter(user=user).values_list('role__role_name', flat=True))
-            post_names = list(UserPost.objects.filter(user=user).values_list('post__post_name', flat=True))
-            
-            data = {
-                'data': serializer.data,
-                'roleGroup': ','.join(role_names),
-                'postGroup': ','.join(post_names)
-            }
-            return self.raw_response(data)
-            
-        elif request.method == 'PUT':
-            # 记录审计日志 (手动调用装饰器逻辑或在此处记录，为简化直接保留逻辑)
-            # 注意：@audit_log 装饰器通常用于整个视图方法，混合方法时可能需要特殊处理
-            # 这里简单起见，直接执行更新逻辑
-            serializer = UserProfileSerializer(user, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return self.ok('个人信息修改成功')
+        data = {
+            'data': serializer.data,
+            'roleGroup': ','.join(role_names),
+            'postGroup': ','.join(post_names)
+        }
+        return self.raw_response(data)
+
+    @action(detail=False, methods=['put'], url_path=r'updateProfile')
+    @audit_log
+    def updateProfile(self, request):
+        user = request.user
+        serializer = UserProfileSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return self.ok('个人信息修改成功')
     
     @action(detail=False, methods=['put'], url_path=r'profile/updatePwd')
     @audit_log
