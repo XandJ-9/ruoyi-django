@@ -303,7 +303,7 @@ function handleClean() {
 function handleExport() {
   proxy.download("monitor/operlog/export",{
     ...queryParams.value,
-  }, `config_${new Date().getTime()}.xlsx`)
+  }, `operlog_${new Date().getTime()}.xlsx`)
 }
 
 getList()

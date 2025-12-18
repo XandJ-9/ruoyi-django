@@ -9,6 +9,8 @@ from rest_framework import status
 
 from .core import BaseViewSet
 from ..permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from ..models import Config
 from ..serializers import (
     ConfigSerializer,
@@ -17,12 +19,22 @@ from ..serializers import (
 )
 
 
-class ConfigViewSet(BaseViewSet):
+class ConfigViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = Config.objects.filter(del_flag='0').order_by('-create_time')
     serializer_class = ConfigSerializer
     update_body_serializer_class = ConfigUpdateSerializer
     update_body_id_field = 'configId'
+    export_field_label = OrderedDict([
+        ('config_id', '参数主键'),
+        ('config_name', '参数名称'),
+        ('config_key', '参数键名'),
+        ('config_value', '参数键值'),
+        ('config_type', '系统内置'),
+        ('remark', '备注'),
+        ('create_time', '创建时间')
+    ])
+    export_filename = '参数数据'
 
     def get_queryset(self):
         qs = Config.objects.filter(del_flag='0')

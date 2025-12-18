@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from .core import BaseViewSet
 from ..permission import HasRolePermission
 from ..common import audit_log
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from ..serializers import (
     UserSerializer, DeptSerializer, UserProfileSerializer, RoleSerializer, PostSerializer,
     UserQuerySerializer, ResetPwdSerializer, ChangeStatusSerializer,
@@ -17,11 +19,27 @@ from ..models import User, Dept, Role, UserRole, Post, UserPost
 
 from drf_spectacular.utils import extend_schema
 
-class UserViewSet(BaseViewSet):
+class UserViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = User.objects.all()
     serializer_class = UserSerializer
     update_body_serializer_class = UserUpdateSerializer
+    export_field_label = OrderedDict([
+        ('id', '用户序号'),
+        ('username', '登录名称'),
+        ('nick_name', '用户昵称'),
+        ('email', '用户邮箱'),
+        ('phonenumber', '手机号码'),
+        ('sex', '用户性别'),
+        ('status', '帐号状态'),
+        ('login_ip', '最后登录IP'),
+        ('login_date', '最后登录时间'),
+        ('dept.dept_name', '部门名称'),
+        ('create_by', '创建者'),
+        ('create_time', '创建时间'),
+        ('remark', '备注')
+    ])
+    export_filename = '用户数据'
     def get_queryset(self):
         queryset = super().get_queryset()
         s = UserQuerySerializer(data=self.request.query_params)

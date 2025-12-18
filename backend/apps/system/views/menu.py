@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .core import BaseViewSet
 from ..permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from ..models import Menu, RoleMenu
 from ..serializers import MenuSerializer, MenuQuerySerializer, MenuUpdateSerializer
 
@@ -14,7 +16,7 @@ class MenuViewSet(BaseViewSet):
     queryset = Menu.objects.filter(del_flag='0').order_by('parent_id', 'order_num')
     serializer_class = MenuSerializer
     update_body_serializer_class = MenuUpdateSerializer
-    update_body_id_field = 'menuId'
+    update_body_id_field = 'menu_id'
 
     def list(self, request, *args, **kwargs):
         s = MenuQuerySerializer(data=request.query_params)

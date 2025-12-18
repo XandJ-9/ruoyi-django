@@ -5,6 +5,8 @@ from rest_framework import status
 
 from .core import BaseViewSet
 from ..permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from ..models import Role, RoleMenu, Menu, User, UserRole
 from ..serializers import (
     RoleSerializer,
@@ -17,12 +19,22 @@ from ..serializers import (
 )
 
 
-class RoleViewSet(BaseViewSet):
+class RoleViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = Role.objects.filter(del_flag='0').order_by('create_time')
     serializer_class = RoleSerializer
     update_body_serializer_class = RoleUpdateSerializer
     update_body_id_field = 'roleId'
+    export_field_label = OrderedDict([
+        ('role_id', '角色序号'),
+        ('role_name', '角色名称'),
+        ('role_key', '角色权限'),
+        ('role_sort', '角色排序'),
+        ('data_scope', '数据范围'),
+        ('status', '角色状态'),
+        ('create_time', '创建时间')
+    ])
+    export_filename = '角色数据'
 
     def get_queryset(self):
         # 使用父类的 queryset 作为基础，避免递归调用自身

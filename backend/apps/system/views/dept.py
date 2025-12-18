@@ -5,6 +5,8 @@ from rest_framework import status
 
 from .core import BaseViewSet
 from ..permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from ..models import Dept
 from ..serializers import (
     DeptSerializer,
@@ -13,12 +15,22 @@ from ..serializers import (
 )
 
 
-class DeptViewSet(BaseViewSet):
+class DeptViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = Dept.objects.filter(del_flag='0').order_by('parent_id', 'order_num')
     serializer_class = DeptSerializer
     update_body_serializer_class = DeptUpdateSerializer
-    update_body_id_field = 'deptId'
+    update_body_id_field = 'dept_id'
+    export_field_label = OrderedDict([
+        ('dept_name', '部门名称'),
+        ('order_num', '排序'),
+        ('leader', '负责人'),
+        ('phone', '联系电话'),
+        ('email', '邮箱'),
+        ('status', '状态'),
+        ('create_time', '创建时间')
+    ])
+    export_filename = '部门数据'
 
     def list(self, request, *args, **kwargs):
         s = DeptQuerySerializer(data=request.query_params)

@@ -11,10 +11,12 @@ from ..serializers import (
     DictTypeUpdateSerializer, DictDataUpdateSerializer
 )
 from ..permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from .core import BaseViewSet
 
 
-class DictTypeViewSet(BaseViewSet):
+class DictTypeViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = DictType.objects.filter(del_flag='0').order_by('-create_time')
     serializer_class = DictTypeSerializer
@@ -93,11 +95,22 @@ class DictTypeViewSet(BaseViewSet):
         return Response({'code': 200, 'msg': '操作成功', 'data': data})
 
 
-class DictDataViewSet(BaseViewSet):
+class DictDataViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = DictData.objects.filter(del_flag='0').order_by('-create_time')
     serializer_class = DictDataSerializer
     update_body_serializer_class = DictDataUpdateSerializer
+    update_body_id_field = 'dict_code'
+    export_field_label = OrderedDict([
+        ('dict_code', '字典编码'),
+        ('dict_label', '字典标签'),
+        ('dict_value', '字典键值'),
+        ('dict_sort', '字典排序'),
+        ('status', '状态'),
+        ('remark', '备注'),
+        ('create_time', '创建时间')
+    ])
+    export_filename = '字典数据'
     update_body_id_field = 'dict_code'
 
     def get_queryset(self):

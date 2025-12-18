@@ -5,6 +5,8 @@ from rest_framework.response import Response
 
 from apps.system.views.core import BaseViewSet
 from apps.system.permission import HasRolePermission
+from apps.common.mixins import ExportExcelMixin
+from collections import OrderedDict
 from .models import OperLog, Logininfor
 from .serializers import (
     OperLogSerializer, OperLogQuerySerializer,
@@ -43,10 +45,22 @@ class OperLogViewSet(BaseViewSet):
         return self.ok('操作日志已清空')
 
 
-class LogininforViewSet(BaseViewSet):
+class LogininforViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = Logininfor.objects.all()
     serializer_class = LogininforSerializer
+    export_field_label = OrderedDict([
+        ('info_id', '访问编号'),
+        ('user_name', '用户名称'),
+        ('ipaddr', '登录地址'),
+        ('login_location', '登录地点'),
+        ('browser', '浏览器'),
+        ('os', '操作系统'),
+        ('status', '登录状态'),
+        ('msg', '操作信息'),
+        ('login_time', '登录时间')
+    ])
+    export_filename = '登录日志'
 
     def get_queryset(self):
         queryset = super().get_queryset()
