@@ -52,6 +52,11 @@ export default defineConfig(({ mode, command }) => {
       open: true,
       proxy: {
           // https://cn.vitejs.dev/config/#server-proxy
+          [`${VITE_APP_BASE_API}/media`]: {
+            target: baseUrl,
+            changeOrigin: true,
+            rewrite: (p) => p.replace(`${VITE_APP_BASE_API}`, '')
+          },
           [`${VITE_APP_BASE_API}`]: {
           target: baseUrl,
           changeOrigin: true,

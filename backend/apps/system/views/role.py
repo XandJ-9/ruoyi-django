@@ -9,12 +9,11 @@ from ..models import Role, RoleMenu, Menu, User, UserRole
 from ..serializers import (
     RoleSerializer,
     RoleQuerySerializer,
-    RoleCreateSerializer,
-    RoleUpdateSerializer,
     RoleChangeStatusSerializer,
     RoleDataScopeSerializer,
     UserQuerySerializer,
     UserSerializer,
+    RoleUpdateSerializer,
 )
 
 
@@ -50,49 +49,6 @@ class RoleViewSet(BaseViewSet):
         if end_time:
             qs = qs.filter(create_time__lte=end_time)
         return qs.order_by('create_time')
-
-    def create(self, request, *args, **kwargs):
-        # 校验数据
-        v = RoleCreateSerializer(data=request.data)
-        v.is_valid(raise_exception=True)
-        vd = v.validated_data
-
-        # 创建角色
-        # role = self.perform_create(v)
-        s = RoleSerializer(data = vd)
-        s.is_valid(raise_exception=True)
-        role = s.save()
-        # 处理菜单关联
-        menu_ids = vd.get('menuIds') or []
-        if menu_ids:
-            menus = list(Menu.objects.filter(menu_id__in=menu_ids, del_flag='0').values_list('menu_id', flat=True))
-            RoleMenu.objects.bulk_create([RoleMenu(role=role, menu_id=mid) for mid in menus])
-
-        return self.ok()
-
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        v = RoleUpdateSerializer(data=request.data, partial=partial)
-        v.is_valid(raise_exception=True)
-        vd = v.validated_data
-
-        # 获取要更新的角色实例
-        instance = self.get_object()
-
-        # 更新角色实例
-        s = RoleSerializer(instance=instance, data = vd)
-        s.is_valid(raise_exception=True)
-        s.save()
-
-        # 更新菜单关联（全量替换）
-        if 'menuIds' in vd:
-            new_ids = set(vd.get('menuIds') or [])
-            RoleMenu.objects.filter(role=instance).delete()
-            if new_ids:
-                menus = list(Menu.objects.filter(menu_id__in=new_ids, del_flag='0').values_list('menu_id', flat=True))
-                RoleMenu.objects.bulk_create([RoleMenu(role=instance, menu_id=mid) for mid in menus])
-
-        return self.ok(msg="角色更新成功")
 
     @action(detail=False, methods=['put'], url_path='changeStatus')
     def change_status(self, request):

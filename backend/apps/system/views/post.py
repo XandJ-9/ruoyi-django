@@ -5,12 +5,9 @@ from rest_framework.permissions import IsAuthenticated
 from .core import BaseViewSet
 from ..permission import HasRolePermission
 from ..models import Post
-from ..serializers import PostSerializer, PostUpdateSerializer, PaginationQuerySerializer
+from ..serializers import PostSerializer, PaginationQuerySerializer, PostQuerySerializer, PostUpdateSerializer
 
-class PostQuerySerializer(PaginationQuerySerializer):
-    postCode = serializers.CharField(required=False, allow_blank=True)
-    postName = serializers.CharField(required=False, allow_blank=True)
-    status = serializers.ChoiceField(required=False, choices=['0','1'])
+
 
 class PostViewSet(BaseViewSet):
     permission_classes = [IsAuthenticated, HasRolePermission]

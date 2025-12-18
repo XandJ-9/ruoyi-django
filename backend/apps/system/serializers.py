@@ -1,6 +1,5 @@
-from typing_extensions import Required
 from rest_framework import serializers
-from .models import User, Dept, Role, UserRole, Menu, DictType, DictData, Config, Post, UserPost
+from .models import User, Dept, Role, UserRole, Menu, DictType, DictData, Config, Post, UserPost, RoleMenu, Notice
 from .common import snake_to_camel
 
 class CamelCaseModelSerializer(serializers.ModelSerializer):
@@ -42,11 +41,10 @@ class BaseModelSerializer(serializers.ModelSerializer):
                     merged.append(f)
             meta.fields = merged
 
- 
 
 # User related
 class UserSerializer(BaseModelSerializer):
-    userId = serializers.IntegerField(source='id', required=False)
+    userId = serializers.IntegerField(source='id', required=False, read_only=True)
     userName = serializers.CharField(source='username', required=False)
     nickName = serializers.CharField(source='nick_name', required=False)
     dept = serializers.SerializerMethodField()
@@ -76,9 +74,6 @@ class UserSerializer(BaseModelSerializer):
         post_ids = validated_data.pop('postIds', [])
         password = validated_data.pop('password', None)
         
-        # 处理 deptId (BaseModelSerializer 会处理普通字段，但 deptId 是映射字段)
-        # 已经在 source='dept_id' 处理了，但需要确保 validated_data 中 key 正确
-        
         user = super().create(validated_data)
         if password:
             user.set_password(password)
@@ -99,9 +94,14 @@ class UserSerializer(BaseModelSerializer):
     def update(self, instance, validated_data):
         role_ids = validated_data.pop('roleIds', None)
         post_ids = validated_data.pop('postIds', None)
+        password = validated_data.pop('password', None)
         
         user = super().update(instance, validated_data)
         
+        if password:
+            user.set_password(password)
+            user.save()
+            
         if role_ids is not None:
             UserRole.objects.filter(user=user).delete()
             roles = Role.objects.filter(role_id__in=role_ids)
@@ -116,6 +116,14 @@ class UserSerializer(BaseModelSerializer):
         
         return user
 
+class UserUpdateSerializer(UserSerializer):
+    userId = serializers.IntegerField(source='id', required=True)
+
+class PostQuerySerializer(PaginationQuerySerializer):
+    postCode = serializers.CharField(required=False, allow_blank=True)
+    postName = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.ChoiceField(required=False, choices=['0','1'])
+
 
 class PostSerializer(BaseModelSerializer):
     postId = serializers.IntegerField(source='post_id', read_only=True)
@@ -128,11 +136,7 @@ class PostSerializer(BaseModelSerializer):
         fields = ['postId', 'postCode', 'postName', 'postSort']
 
 class PostUpdateSerializer(PostSerializer):
-    postId = serializers.IntegerField(source='post_id')
-
-    class Meta:
-        model = Post
-        fields = ['postId', 'postCode', 'postName', 'postSort']
+    postId = serializers.IntegerField(source='post_id', required=True)
 
 class UserQuerySerializer(PaginationQuerySerializer):
     userName = serializers.CharField(required=False, allow_blank=True)
@@ -225,50 +229,67 @@ class AuthRoleQuerySerializer(PaginationQuerySerializer):
 
 # Dept related
 class DeptSerializer(BaseModelSerializer):
-    deptId = serializers.IntegerField(source='dept_id')
-    parentId = serializers.IntegerField(source='parent_id')
+    deptId = serializers.IntegerField(source='dept_id', read_only=True)
+    parentId = serializers.IntegerField(source='parent_id', default=0)
     deptName = serializers.CharField(source='dept_name')
-    orderNum = serializers.IntegerField(source='order_num')
+    orderNum = serializers.IntegerField(source='order_num', default=0)
+    leader = serializers.CharField(required=False, allow_blank=True, default='')
+    phone = serializers.CharField(required=False, allow_blank=True, default='')
+    email = serializers.CharField(required=False, allow_blank=True, default='')
     
     class Meta:
         model = Dept
         fields = ['deptId', 'parentId', 'deptName', 'orderNum', 'leader', 'phone', 'email', 'status', 'remark']
 
+class DeptUpdateSerializer(DeptSerializer):
+    deptId = serializers.IntegerField(source='dept_id', required=True)
+
 class DeptQuerySerializer(PaginationQuerySerializer):
     deptName = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(required=False, choices=['0','1'])
 
-class DeptCreateSerializer(serializers.Serializer):
-    parentId = serializers.IntegerField(required=False, default=0)
-    deptName = serializers.CharField(max_length=30)
-    orderNum = serializers.IntegerField(required=False, default=0)
-    leader = serializers.CharField(required=False, allow_blank=True, default='')
-    phone = serializers.CharField(required=False, allow_blank=True, default='')
-    email = serializers.CharField(required=False, allow_blank=True, default='')
-    status = serializers.ChoiceField(required=False, choices=['0','1'], default='0')
-
-class DeptUpdateSerializer(DeptCreateSerializer):
-    deptId = serializers.IntegerField()
 
 # Role related
 class RoleSerializer(BaseModelSerializer):
     roleId = serializers.IntegerField(source='role_id', read_only=True)
     roleName = serializers.CharField(source='role_name')
     roleKey = serializers.CharField(source='role_key')
-    roleSort = serializers.IntegerField(source='role_sort')
-    dataScope = serializers.CharField(source='data_scope', required=False)
-    menuCheckStrictly = serializers.SerializerMethodField()
-    deptCheckStrictly = serializers.SerializerMethodField()
+    roleSort = serializers.IntegerField(source='role_sort', default=0)
+    dataScope = serializers.CharField(source='data_scope', required=False, default='1')
+    menuCheckStrictly = serializers.BooleanField(source='menu_check_strictly', default=True)
+    deptCheckStrictly = serializers.BooleanField(source='dept_check_strictly', default=True)
+    menuIds = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
+    deptIds = serializers.ListField(child=serializers.IntegerField(), required=False, write_only=True)
 
     class Meta:
         model = Role
-        fields = ['roleId', 'roleName', 'roleKey', 'roleSort', 'dataScope', 'menuCheckStrictly', 'deptCheckStrictly']
+        fields = ['roleId', 'roleName', 'roleKey', 'roleSort', 'dataScope', 'menuCheckStrictly', 'deptCheckStrictly', 'menuIds', 'deptIds']
 
-    def get_menuCheckStrictly(self, obj):
-        return True if getattr(obj, 'menu_check_strictly', 1) == 1 else False
+    def create(self, validated_data):
+        menu_ids = validated_data.pop('menuIds', [])
+        dept_ids = validated_data.pop('deptIds', [])
+        
+        role = super().create(validated_data)
+        
+        if menu_ids:
+            RoleMenu.objects.bulk_create([RoleMenu(role=role, menu_id=mid) for mid in menu_ids])
+            
+        return role
 
-    def get_deptCheckStrictly(self, obj):
-        return True if getattr(obj, 'dept_check_strictly', 1) == 1 else False
+    def update(self, instance, validated_data):
+        menu_ids = validated_data.pop('menuIds', None)
+        dept_ids = validated_data.pop('deptIds', None)
+        
+        role = super().update(instance, validated_data)
+        
+        if menu_ids is not None:
+            RoleMenu.objects.filter(role=role).delete()
+            RoleMenu.objects.bulk_create([RoleMenu(role=role, menu_id=mid) for mid in menu_ids])
+            
+        return role
+
+class RoleUpdateSerializer(RoleSerializer):
+    roleId = serializers.IntegerField(source='role_id', required=True)
 
 class RoleQuerySerializer(PaginationQuerySerializer):
     roleName = serializers.CharField(required=False, allow_blank=True)
@@ -276,20 +297,6 @@ class RoleQuerySerializer(PaginationQuerySerializer):
     status = serializers.ChoiceField(required=False, choices=['0','1'])
     beginTime = serializers.DateTimeField(required=False)
     endTime = serializers.DateTimeField(required=False)
-
-class RoleCreateSerializer(serializers.Serializer):
-    roleName = serializers.CharField(max_length=30)
-    roleKey = serializers.CharField(max_length=100)
-    roleSort = serializers.IntegerField(required=False, default=0)
-    status = serializers.ChoiceField(choices=['0','1'], default='0')
-    remark = serializers.CharField(required=False, allow_blank=True, default='')
-    dataScope = serializers.ChoiceField(required=False, choices=['1','2','3','4','5'], default='1')
-    menuCheckStrictly = serializers.BooleanField(required=False, default=True)
-    deptCheckStrictly = serializers.BooleanField(required=False, default=True)
-    menuIds = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
-
-class RoleUpdateSerializer(RoleCreateSerializer):
-    roleId = serializers.IntegerField()
 
 class RoleChangeStatusSerializer(serializers.Serializer):
     roleId = serializers.IntegerField()
@@ -306,46 +313,29 @@ class MenuQuerySerializer(PaginationQuerySerializer):
     menuName = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(required=False, choices=['0','1'])
 
-class MenuCreateSerializer(serializers.Serializer):
-    parentId = serializers.IntegerField(required=False, default=0)
-    menuName = serializers.CharField(max_length=50)
-    orderNum = serializers.IntegerField(required=False, default=0)
-    path = serializers.CharField(required=False, allow_blank=True, default='')
-    component = serializers.CharField(required=False, allow_blank=True, default='')
-    routeName = serializers.CharField(required=False, allow_blank=True, default='')
-    query = serializers.CharField(required=False, allow_blank=True, default='')
-    isFrame = serializers.ChoiceField(choices=['0','1'], default='1')
-    isCache = serializers.ChoiceField(choices=['0','1'], default='0')
-    menuType = serializers.ChoiceField(choices=['M','C','F'], default='M')
-    visible = serializers.ChoiceField(choices=['0','1'], default='0')
-    status = serializers.ChoiceField(choices=['0','1'], default='0')
-    perms = serializers.CharField(required=False, allow_blank=True, default='')
-    icon = serializers.CharField(required=False, allow_blank=True, default='')
-    remark = serializers.CharField(required=False, allow_blank=True, default='')
-
-class MenuUpdateSerializer(MenuCreateSerializer):
-    menuId = serializers.IntegerField()
-
 class MenuSerializer(BaseModelSerializer):
     menuId = serializers.IntegerField(source='menu_id', read_only=True)
-    parentId = serializers.IntegerField(source='parent_id')
+    parentId = serializers.IntegerField(source='parent_id', default=0)
     menuName = serializers.CharField(source='menu_name')
-    orderNum = serializers.IntegerField(source='order_num')
+    orderNum = serializers.IntegerField(source='order_num', default=0)
     path = serializers.CharField(required=False, allow_blank=True, default='')
-    component = serializers.CharField(allow_blank=True)
-    routeName = serializers.CharField(source='route_name', allow_blank=True)
-    query = serializers.CharField(allow_blank=True)
-    isFrame = serializers.CharField(source='is_frame')
-    isCache = serializers.CharField(source='is_cache')
-    menuType = serializers.CharField(source='menu_type')
-    visible = serializers.CharField(required=False, default='0')
-    perms = serializers.CharField(allow_blank=True)
-    icon = serializers.CharField(allow_blank=True)
+    component = serializers.CharField(required=False, allow_blank=True, default='')
+    routeName = serializers.CharField(source='route_name', required=False, allow_blank=True, default='')
+    query = serializers.CharField(required=False, allow_blank=True, default='')
+    isFrame = serializers.CharField(source='is_frame', default='1')
+    isCache = serializers.CharField(source='is_cache', default='0')
+    menuType = serializers.CharField(source='menu_type', default='M')
+    visible = serializers.CharField(default='0')
+    perms = serializers.CharField(required=False, allow_blank=True, default='')
+    icon = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model = Menu
         fields = ['menuId', 'parentId', 'menuName', 'orderNum', 'path', 'component', 'routeName', 'query', 'isFrame',
                   'isCache', 'menuType', 'visible', 'perms', 'icon']
+
+class MenuUpdateSerializer(MenuSerializer):
+    menuId = serializers.IntegerField(source='menu_id', required=True)
 
 # DictType related
 class DictTypeQuerySerializer(PaginationQuerySerializer):
@@ -363,7 +353,7 @@ class DictTypeSerializer(BaseModelSerializer):
         fields = ['dictId', 'dictName', 'dictType']
 
 class DictTypeUpdateSerializer(DictTypeSerializer):
-    dictId = serializers.IntegerField(source='dict_id')
+    dictId = serializers.IntegerField(source='dict_id', required=True)
 
 # DictData related
 class DictDataQuerySerializer(PaginationQuerySerializer):
@@ -373,21 +363,19 @@ class DictDataQuerySerializer(PaginationQuerySerializer):
 
 class DictDataSerializer(BaseModelSerializer):
     dictCode = serializers.IntegerField(source='dict_code', read_only=True)
-    dictSort = serializers.IntegerField(source='dict_sort')
+    dictSort = serializers.IntegerField(source='dict_sort', default=0)
     dictLabel = serializers.CharField(source='dict_label')
     dictValue = serializers.CharField(source='dict_value')
     dictType = serializers.CharField(source='dict_type')
-    cssClass = serializers.CharField(source='css_class', allow_blank=True, required=False)
-    listClass = serializers.CharField(source='list_class', allow_blank=True, required=False)
+    cssClass = serializers.CharField(source='css_class', allow_blank=True, required=False, default='')
+    listClass = serializers.CharField(source='list_class', allow_blank=True, required=False, default='')
 
     class Meta:
         model = DictData
         fields = ['dictCode', 'dictSort', 'dictLabel', 'dictValue', 'dictType', 'cssClass', 'listClass']
 
 class DictDataUpdateSerializer(DictDataSerializer):
-    dictCode = serializers.IntegerField(source='dict_code')
-
-
+    dictCode = serializers.IntegerField(source='dict_code', required=True)
 
 # Config related
 class ConfigQuerySerializer(PaginationQuerySerializer):
@@ -402,18 +390,30 @@ class ConfigSerializer(BaseModelSerializer):
     configName = serializers.CharField(source='config_name')
     configKey = serializers.CharField(source='config_key')
     configValue = serializers.CharField(source='config_value')
-    configType = serializers.CharField(source='config_type')
+    configType = serializers.CharField(source='config_type', default='Y')
 
     class Meta:
         model = Config
         fields = ['configId', 'configName', 'configKey', 'configValue', 'configType']
 
-class ConfigCreateSerializer(serializers.Serializer):
-    configName = serializers.CharField(max_length=100)
-    configKey = serializers.CharField(max_length=100)
-    configValue = serializers.CharField(max_length=500)
-    configType = serializers.ChoiceField(choices=['Y','N'], default='Y')
-    remark = serializers.CharField(required=False, allow_blank=True, default='')
+class ConfigUpdateSerializer(ConfigSerializer):
+    configId = serializers.IntegerField(source='config_id', required=True)
 
-class ConfigUpdateSerializer(ConfigCreateSerializer):
-    configId = serializers.IntegerField()
+# Notice related
+class NoticeQuerySerializer(PaginationQuerySerializer):
+    noticeTitle = serializers.CharField(required=False, allow_blank=True)
+    createBy = serializers.CharField(required=False, allow_blank=True)
+    noticeType = serializers.CharField(required=False, allow_blank=True)
+
+class NoticeSerializer(BaseModelSerializer):
+    noticeId = serializers.IntegerField(source='notice_id', read_only=True)
+    noticeTitle = serializers.CharField(source='notice_title')
+    noticeType = serializers.CharField(source='notice_type')
+    noticeContent = serializers.CharField(source='notice_content', allow_blank=True, required=False)
+    
+    class Meta:
+        model = Notice
+        fields = ['noticeId', 'noticeTitle', 'noticeType', 'noticeContent', 'status', 'remark', 'createBy', 'createTime']
+
+class NoticeUpdateSerializer(NoticeSerializer):
+    noticeId = serializers.IntegerField(source='notice_id', required=True)

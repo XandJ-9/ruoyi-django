@@ -13,7 +13,6 @@ from ..models import Config
 from ..serializers import (
     ConfigSerializer,
     ConfigQuerySerializer,
-    ConfigCreateSerializer,
     ConfigUpdateSerializer,
 )
 

@@ -9,7 +9,6 @@ from ..models import Dept
 from ..serializers import (
     DeptSerializer,
     DeptQuerySerializer,
-    DeptCreateSerializer,
     DeptUpdateSerializer,
 )
 
@@ -36,59 +35,6 @@ class DeptViewSet(BaseViewSet):
 
         serializer = self.get_serializer(qs, many=True)
         return Response({"code": 200, "msg": "操作成功", "data": serializer.data})
-
-    # 详情响应由 BaseViewSet.retrieve 统一封装
-
-    def create(self, request, *args, **kwargs):
-        v = DeptCreateSerializer(data=request.data)
-        v.is_valid(raise_exception=True)
-        vd = v.validated_data
-
-        dept = Dept(
-            parent_id=vd.get('parentId', 0) or 0,
-            dept_name=vd.get('deptName'),
-            order_num=vd.get('orderNum', 0),
-            leader=vd.get('leader', '') or '',
-            phone=vd.get('phone', '') or '',
-            email=vd.get('email', '') or '',
-            status=vd.get('status', '0'),
-        )
-        # 审计字段
-        user = getattr(self.request, 'user', None)
-        if user and getattr(user, 'username', None):
-            dept.create_by = user.username
-            dept.update_by = user.username
-        dept.save()
-        return self.ok()
-
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        v = DeptUpdateSerializer(instance=instance, data=request.data, partial=partial)
-        v.is_valid(raise_exception=True)
-        vd = v.validated_data
-
-        for src, dst in [
-            ('parentId', 'parent_id'),
-            ('deptName', 'dept_name'),
-            ('orderNum', 'order_num'),
-            ('leader', 'leader'),
-            ('phone', 'phone'),
-            ('email', 'email'),
-            ('status', 'status'),
-        ]:
-            if src in vd:
-                setattr(instance, dst, vd.get(src))
-
-        user = getattr(self.request, 'user', None)
-        if user and getattr(user, 'username', None):
-            instance.update_by = user.username
-        instance.save()
-        return self.ok()
-
-    # 软删除由 BaseViewSet.destroy 统一实现
-
-    # 集合更新由 BaseViewSet.update_by_body 统一实现
 
     @action(detail=False, methods=['get'], url_path=r'list/exclude/(?P<deptId>\d+)')
     def list_exclude_child(self, request, deptId=None):

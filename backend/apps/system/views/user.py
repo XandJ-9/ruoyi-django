@@ -10,10 +10,10 @@ from ..common import audit_log
 from ..serializers import (
     UserSerializer, DeptSerializer, UserProfileSerializer, RoleSerializer, PostSerializer,
     UserQuerySerializer, ResetPwdSerializer, ChangeStatusSerializer,
-    UpdatePwdSerializer, AvatarSerializer, AuthRoleAssignSerializer, AuthRoleQuerySerializer
+    UpdatePwdSerializer, AvatarSerializer, AuthRoleAssignSerializer, AuthRoleQuerySerializer,
+    UserUpdateSerializer
 )
 from ..models import User, Dept, Role, UserRole, Post, UserPost
-from ..serializers import UserSerializer, DeptSerializer, UserProfileSerializer, RoleSerializer
 
 from drf_spectacular.utils import extend_schema
 
@@ -21,7 +21,7 @@ class UserViewSet(BaseViewSet):
     permission_classes = [IsAuthenticated, HasRolePermission]
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    update_body_serializer_class = UserSerializer
+    update_body_serializer_class = UserUpdateSerializer
     def get_queryset(self):
         queryset = super().get_queryset()
         s = UserQuerySerializer(data=self.request.query_params)
@@ -46,19 +46,6 @@ class UserViewSet(BaseViewSet):
         if end_time:
             queryset = queryset.filter(create_time__lte=end_time)
         return queryset.order_by('-create_time')
-    
-    def list(self, request, *args, **kwargs):
-        # 如果是 model_list 调用的（即 GET /system/user/list），或者显式要求列表，则走父类逻辑
-        if self.action == 'model_list':
-            return super().list(request, *args, **kwargs)
-        
-        # 否则处理 GET /system/user/，返回新增用户时的初始化数据（角色和岗位列表）
-        roles = Role.objects.filter(status='0', del_flag='0')
-        posts = Post.objects.filter(status='0', del_flag='0')
-        return self.raw_response({
-            'roles': RoleSerializer(roles, many=True).data,
-            'posts': PostSerializer(posts, many=True).data
-        })
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -175,7 +162,7 @@ class UserViewSet(BaseViewSet):
             serializer.save()
             return self.ok('个人信息修改成功')
     
-    @action(detail=False, methods=['put'])
+    @action(detail=False, methods=['put'], url_path=r'profile/updatePwd')
     @audit_log
     def updatePwd(self, request):
         v = UpdatePwdSerializer(data=request.data)
@@ -190,7 +177,7 @@ class UserViewSet(BaseViewSet):
         user.save()
         return self.ok('密码修改成功')
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path=r'profile/avatar')
     @audit_log
     def avatar(self, request):
         avatar_file = request.FILES.get('avatarfile')

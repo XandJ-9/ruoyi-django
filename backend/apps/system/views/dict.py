@@ -7,7 +7,8 @@ from django.core.cache import cache
 from ..models import DictType, DictData
 from ..serializers import (
     DictTypeSerializer, DictDataSerializer,
-    DictTypeQuerySerializer, DictDataQuerySerializer,DictTypeUpdateSerializer,DictDataUpdateSerializer
+    DictTypeQuerySerializer, DictDataQuerySerializer,
+    DictTypeUpdateSerializer, DictDataUpdateSerializer
 )
 from ..permission import HasRolePermission
 from .core import BaseViewSet

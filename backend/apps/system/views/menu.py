@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .core import BaseViewSet
 from ..permission import HasRolePermission
 from ..models import Menu, RoleMenu
-from ..serializers import MenuSerializer, MenuQuerySerializer, MenuCreateSerializer, MenuUpdateSerializer
+from ..serializers import MenuSerializer, MenuQuerySerializer, MenuUpdateSerializer
 
 
 class MenuViewSet(BaseViewSet):
@@ -33,22 +33,6 @@ class MenuViewSet(BaseViewSet):
         #     return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(qs, many=True)
         return Response({"code": 200, "msg": "操作成功", "data": serializer.data})
-
-    def create(self, request, *args, **kwargs):
-        v = MenuCreateSerializer(data=request.data)
-        v.is_valid(raise_exception=True)
-        serializer = self.get_serializer(data=v.validated_data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return self.ok()
-
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return self.ok()
 
     @action(detail=False, methods=['get'])
     def treeselect(self, request):
