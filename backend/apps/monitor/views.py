@@ -7,8 +7,8 @@ from django.db.models import Q
 from apps.system.views.core import BaseViewSet, BaseViewMixin
 from apps.system.permission import HasRolePermission
 from apps.system.common import camel_to_snake
-from .models import OperLog
-from .serializers import OperLogSerializer
+from .models import OperLog, Logininfor
+from .serializers import OperLogSerializer, LogininforSerializer, LogininforQuerySerializer
 
 import os
 import sys
@@ -323,5 +323,94 @@ class OperLogViewSet(BaseViewSet):
                     r.get('deptName')
                 ])
             return self.excel_response('operlog.xlsx', wb)
+        except Exception as e:
+            return self.error(f'导出失败：{e}')
+
+
+class LogininforViewSet(BaseViewSet):
+    permission_classes = [IsAuthenticated, HasRolePermission]
+    serializer_class = LogininforSerializer
+    queryset = Logininfor.objects.all().order_by('-login_time')
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        request = self.request
+
+        # 从前端查询参数获取过滤条件
+        ipaddr = request.query_params.get('ipaddr', '')
+        user_name = request.query_params.get('userName', '')
+        status = request.query_params.get('status', '')
+        begin_time = request.query_params.get('beginTime')
+        end_time = request.query_params.get('endTime')
+
+        if ipaddr:
+            qs = qs.filter(ipaddr__icontains=ipaddr)
+        if user_name:
+            qs = qs.filter(user_name__icontains=user_name)
+        if status:
+            qs = qs.filter(status=status)
+        if begin_time:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(begin_time, '%Y-%m-%d %H:%M:%S')
+                qs = qs.filter(login_time__gte=dt)
+            except Exception:
+                pass
+        if end_time:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                qs = qs.filter(login_time__lte=dt)
+            except Exception:
+                pass
+
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        pk = kwargs.get(self.lookup_field or 'pk')
+        if pk and isinstance(pk, str) and ',' in pk:
+            ids = [int(i) for i in pk.split(',') if i.isdigit()]
+            Model = self.get_queryset().model
+            try:
+                Model.objects.filter(info_id__in=ids).delete()
+                return self.ok('删除成功')
+            except Exception:
+                return self.error('删除失败')
+        return super().destroy(request, *args, **kwargs)
+
+    @action(methods=['DELETE'], detail=False, url_path='clean')
+    def clean(self, request, *args, **kwargs):
+        try:
+            Model = self.get_queryset().model
+            Model.objects.all().delete()
+            return self.ok('清空成功')
+        except Exception:
+            return self.error('清空失败')
+
+    @action(methods=['GET'], detail=False, url_path='unlock/(?P<userName>[^/]+)')
+    def unlock(self, request, userName=None):
+        """解锁用户"""
+        # 这里可以实现解锁逻辑，比如清除用户的登录失败次数
+        # 目前返回成功，实际业务逻辑根据需求实现
+        return self.ok(f'用户 {userName} 解锁成功')
+
+    @action(methods=['POST'], detail=False, url_path='export')
+    def export(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        serializer = self.get_serializer(qs, many=True)
+        rows = serializer.data
+        try:
+            from openpyxl import Workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = '登录日志'
+            headers = ['访问编号', '用户名称', '登录地址', '登录地点', '浏览器', '操作系统', '登录状态', '提示', '访问时间']
+            ws.append(headers)
+            for r in rows:
+                ws.append([
+                    r.get('infoId'), r.get('userName'), r.get('ipaddr'), r.get('loginLocation'),
+                    r.get('browser'), r.get('os'), r.get('status'), r.get('msg'), r.get('loginTime')
+                ])
+            return self.excel_response('logininfor.xlsx', wb)
         except Exception as e:
             return self.error(f'导出失败：{e}')

@@ -81,7 +81,7 @@ def _business_type_from_method(method: str) -> int:
 class OperLogMiddleware:
     """
     记录后端接口的操作日志：请求方法、路径、用户、参数、响应结果等。
-    仅记录以 /data-api/ 开头的接口，避免前端静态资源噪音。
+    仅记录以 /api/ 开头的接口，避免前端静态资源噪音。
     """
 
     def __init__(self, get_response):
@@ -90,7 +90,7 @@ class OperLogMiddleware:
     def __call__(self, request):
         # 仅记录 API 路径
         path = request.path or ''
-        if not path.startswith('/data-api/'):
+        if not path.startswith('/api/'):
             return self.get_response(request)
 
         start_ts = time.time()
@@ -120,13 +120,13 @@ class OperLogMiddleware:
                 except Exception:
                     pass
 
-                # 构造 title：取 /data-api/ 后第一段作为模块名
+                # 构造 title：取 /api/ 后第一段作为模块名
                 try:
-                    # /data-api/<module>/...
-                    segs = path[len('/data-api/'):].split('/')
-                    title = segs[0] if segs and segs[0] else 'data-api'
+                    # /api/<module>/...
+                    segs = path[len('/api/'):].split('/')
+                    title = segs[0] if segs and segs[0] else 'api'
                 except Exception:
-                    title = 'data-api'
+                    title = 'api'
 
                 # 请求参数快照
                 oper_param = _build_params_snapshot(request)

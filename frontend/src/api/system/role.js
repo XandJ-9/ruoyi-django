@@ -117,3 +117,12 @@ export function deptTreeSelect(roleId) {
     method: 'get'
   })
 }
+
+// 导出角色
+export function exportRole(query) {
+  return request({
+    url: '/system/role/export',
+    method: 'post',
+    params: query
+  })
+}

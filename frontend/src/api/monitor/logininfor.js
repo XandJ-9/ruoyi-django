@@ -32,3 +32,12 @@ export function cleanLogininfor() {
     method: 'delete'
   })
 }
+
+// 导出登录日志
+export function exportLogininfor(query) {
+  return request({
+    url: '/monitor/logininfor/export',
+    method: 'post',
+    params: query
+  })
+}

@@ -26,13 +26,25 @@ class BaseViewMixin:
         output = io.StringIO()
         if bom:
             output.write('\ufeff')
+        # if columns:
+        #     headers = columns
+            # writer = csv.DictWriter(output, fieldnames=headers)
+            # writer.writeheader()
+            # for r in rows:
+            #     row = {k: v for k, v in zip(headers, r)}
+            #     writer.writerow(row)
         if columns:
             headers = columns
-            writer = csv.DictWriter(output, fieldnames=headers)
-            writer.writeheader()
+            # 使用 csv.writer 处理重复列名情况（不用 DictWriter）
+            writer = csv.writer(output)
+            writer.writerow(headers)
             for r in rows:
-                row = {k: v for k, v in zip(headers, r)}
-                writer.writerow(row)
+                writer.writerow(r)
+        else:
+            # 没有列头，直接写入数据
+            writer = csv.writer(output)
+            for r in rows:
+                writer.writerow(r)
         resp = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8')
         resp['Content-Disposition'] = f'attachment; filename={quote(filename)}'
         return resp

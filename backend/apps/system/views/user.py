@@ -2,6 +2,9 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q
+from django.http import HttpResponse, FileResponse
+from django.conf import settings
+import os
 
 from rest_framework.permissions import IsAuthenticated
 from collections import OrderedDict
@@ -19,6 +22,7 @@ from ..serializers import (
 
 from apps.common.mixins import ExportExcelMixin
 from drf_spectacular.utils import extend_schema
+from urllib.parse import quote
 
 class UserViewSet(BaseViewSet, ExportExcelMixin):
     permission_classes = [IsAuthenticated, HasRolePermission]
@@ -268,3 +272,33 @@ class UserViewSet(BaseViewSet, ExportExcelMixin):
             return self.ok('授权成功')
         except User.DoesNotExist:
             return self.not_found('用户不存在')
+
+    @action(detail=False, methods=['post'], url_path=r'importTemplate')
+    def importTemplate(self, request):
+        """下载用户导入模板"""
+        # try:
+        #     # 模板文件路径
+        #     template_path = os.path.join(settings.BASE_DIR, 'media', 'templates', '用户导入模板.xlsx')
+
+        #     # 检查文件是否存在
+        #     if not os.path.exists(template_path):
+        #         return self.error('模板文件不存在，请联系管理员')
+
+        #     # 读取文件并返回
+        #     with open(template_path, 'rb') as f:
+        #         file_content = f.read()
+
+        #     response = HttpResponse(
+        #         file_content,
+        #         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        #     )
+
+        #     # 设置文件名（中文需要编码）
+        #     filename = quote('用户导入模板.xlsx')
+        #     response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        #     response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+
+        #     return response
+        # except Exception as e:
+        #     return self.error(f'模板下载失败：{str(e)}')
+        return self.export(request)

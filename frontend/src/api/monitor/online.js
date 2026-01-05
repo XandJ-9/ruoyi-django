@@ -16,3 +16,12 @@ export function forceLogout(tokenId) {
     method: 'delete'
   })
 }
+
+// 导出在线用户
+export function exportOnline(query) {
+  return request({
+    url: '/monitor/online/export',
+    method: 'post',
+    params: query
+  })
+}

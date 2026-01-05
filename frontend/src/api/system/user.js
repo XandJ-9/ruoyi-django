@@ -134,3 +134,12 @@ export function deptTreeSelect() {
     method: 'get'
   })
 }
+
+// 导出用户
+export function exportUser(query) {
+  return request({
+    url: '/system/user/export',
+    method: 'post',
+    params: query
+  })
+}

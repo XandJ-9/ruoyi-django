@@ -58,3 +58,12 @@ export function optionselect() {
     method: 'get'
   })
 }
+
+// 导出字典类型
+export function exportType(query) {
+  return request({
+    url: '/system/dict/type/export',
+    method: 'post',
+    params: query
+  })
+}

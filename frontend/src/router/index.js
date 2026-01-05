@@ -144,6 +144,7 @@ export const dynamicRoutes = [
       }
     ]
   },
+
   {
     path: '/tool/gen-edit',
     component: Layout,

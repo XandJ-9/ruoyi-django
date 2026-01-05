@@ -25,14 +25,15 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
-    # 1. 前端入口页面：访问根路径时返回 Vue 的 index.html
-    path('/', TemplateView.as_view(template_name='index.html')),
-    # # 2. 处理 Vue 路由的 History 模式（可选，若 Vue 用了 History 模式）
-    re_path(r'^/.*$', TemplateView.as_view(template_name='index.html')),
+    # API routes must be defined before the catch-all pattern
     path('api/', include('apps.system.urls')),
     path('api/monitor/', include('apps.monitor.urls')),
     path('api/captcha/', include('captcha.urls')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # 1. 前端入口页面：访问根路径时返回 Vue 的 index.html
+    path('/', TemplateView.as_view(template_name='index.html')),
+    # # 2. 处理 Vue 路由的 History 模式（可选，若 Vue 用了 History 模式）
+    re_path(r'^/.*$', TemplateView.as_view(template_name='index.html')),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
