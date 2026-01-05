@@ -1,11 +1,10 @@
 import axios from 'axios'
 import { ElNotification , ElMessageBox, ElMessage, ElLoading } from 'element-plus'
-import { getToken } from '@/utils/auth'
+import { getToken, removeToken } from '@/utils/auth'
 import errorCode from '@/utils/errorCode'
 import { tansParams, blobValidate } from '@/utils/ruoyi'
 import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
-import useUserStore from '@/store/modules/user'
 import router from '@/router'
 
 let downloadLoadingInstance
@@ -85,10 +84,11 @@ service.interceptors.response.use(res => {
     if (code === 401) {
       if (!isRelogin.show) {
         isRelogin.show = true
-        ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '取消', type: 'warning' }).then(() => {
+          ElMessageBox.confirm('登录状态已过期，您可以继续留在该页面，或者重新登录', '系统提示', { confirmButtonText: '重新登录', cancelButtonText: '取消', type: 'warning' }).then(() => {
             isRelogin.show = false
             removeToken()
-            router.replace({ path: '/login' })
+            const redirect = router.currentRoute.value?.fullPath || '/'
+            window.location.href = router.resolve({ path: '/login', query: { redirect } }).href
         //   useUserStore().logOut().then(() => {
         //       // location.href = '/index'
         //       router.replace({ path: '/index' })

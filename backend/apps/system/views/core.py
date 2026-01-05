@@ -8,18 +8,150 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from captcha.models import CaptchaStore
 from captcha.views import captcha_image
 import base64
+from django.db.models import Q
+from django.core.cache import cache
 
 from ..models import UserRole, Menu, DictType, DictData
 from ..serializers import DictTypeSerializer, DictDataSerializer, UserProfileSerializer, UserInfoSerializer
-from django.db.models import Q
-from django.core.cache import cache
-from rest_framework.pagination import PageNumberPagination
 from ..common import audit_log
 
-from drf_spectacular.utils import extend_schema
+from apps.common.mixins import BaseViewMixin
 
+class BaseViewSet(BaseViewMixin,viewsets.ModelViewSet):
+    required_roles = None
+    # 兼容前端 PUT /xxx（集合更新）通用支持
+    update_body_serializer_class = None  # 子类设置：用于校验请求体
+    update_body_id_field = 'id'          # 子类设置：请求体中的主键字段名，如 menuId/deptId/roleId/configId
 
- 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        model = qs.model
+        if hasattr(model, 'del_flag'):
+            try:
+                qs = qs.filter(del_flag='0')
+            except Exception:
+                pass
+        return qs
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        # return Response({'total': len(serializer.data), 'rows': serializer.data, 'code': 200, 'msg': '操作成功'})
+        return self.raw_response({'total': len(serializer.data), 'rows': serializer.data, 'code': 200, 'msg': '操作成功'})
+
+    @audit_log
+    def create(self, request, *args, **kwargs):
+        serializer_class = getattr(self, 'create_serializer_class', None) or self.get_serializer_class()
+        serializer = serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return self.ok()
+
+    @audit_log
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer_class = getattr(self, 'update_serializer_class', None) or self.get_serializer_class()
+        serializer = serializer_class(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return self.ok()
+
+    @audit_log
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if hasattr(instance, 'del_flag'):
+            instance.del_flag = '1'
+            instance.save(update_fields=['del_flag'])
+            return self.ok()
+        return super().destroy(request, *args, **kwargs)
+
+    # 统一数据详情响应包装
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # data = self.get_serializer(instance).data
+        serializer_class = getattr(self, 'retrieve_serializer_class', None) or self.get_serializer_class()
+        serializer = serializer_class(instance)
+        return self.data(serializer.data)
+
+    @audit_log
+    def partial_update(self, request, *args, **kwargs):
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        user = getattr(self.request, 'user', None)
+        kwargs = {}
+        Model = getattr(serializer.Meta, 'model', None)
+        if hasattr(Model, 'create_by') and user and getattr(user, 'username', None):
+            kwargs['create_by'] = user.username
+        if hasattr(Model, 'update_by') and user and getattr(user, 'username', None):
+            kwargs['update_by'] = user.username
+
+        instance = None
+        try:
+            data = getattr(serializer, 'validated_data', {})
+            if Model is not None:
+                pk_name = Model._meta.pk.attname
+                lookup = {}
+                if pk_name in data:
+                    lookup[pk_name] = data.get(pk_name)
+                else:
+                    # 尝试使用唯一字段匹配
+                    for f in Model._meta.fields:
+                        if getattr(f, 'unique', False) and f.attname in data:
+                            lookup[f.attname] = data.get(f.attname)
+                            break
+                if lookup:
+                    instance = Model.objects.filter(**lookup).first()
+        except Exception:
+            instance = None
+
+        if instance is not None:
+            serializer.instance = instance
+            if hasattr(Model, 'del_flag'):
+                kwargs['del_flag'] = '0'
+            serializer.save(**kwargs)
+        else:
+            serializer.save(**kwargs)
+
+    def perform_update(self, serializer):
+        user = getattr(self.request, 'user', None)
+        kwargs = {}
+        if hasattr(serializer.Meta.model, 'update_by') and user and getattr(user, 'username', None):
+            kwargs['update_by'] = user.username
+        serializer.save(**kwargs)
+
+    @action(detail=False, methods=['get'],url_path='list')
+    def model_list(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+    # 兼容前端 PUT /xxx（不带主键）更新：子类设置 update_body_serializer_class + update_body_id_field 即可复用
+    def update_by_body(self, request, *args, **kwargs):
+        vcls = getattr(self, 'update_body_serializer_class', None)
+        id_field = getattr(self, 'update_body_id_field', 'id')
+        if not vcls:
+            return Response({'code': 404, 'msg': '未实现集合更新'}, status=status.HTTP_404_NOT_FOUND)
+        v = vcls(data=request.data)
+        v.is_valid(raise_exception=True)
+        obj_id = v.validated_data.get(id_field)
+        Model = self.get_queryset().model
+        try:
+            if hasattr(Model, 'del_flag'):
+                instance = Model.objects.get(pk=obj_id, del_flag='0')
+            else:
+                instance = Model.objects.get(pk=obj_id)
+        except Model.DoesNotExist:
+            # return Response({'code': 404, 'msg': '资源不存在'}, status=status.HTTP_404_NOT_FOUND)
+            return self.not_found(msg=f'资源不存在，id={obj_id}')
+        kwargs['partial'] = False
+        self.kwargs.update(kwargs)
+        self.get_object = lambda: instance
+        return self.update(request, *args, **kwargs)
 
 
 class CaptchaView(TokenObtainPairView):
@@ -52,7 +184,6 @@ class LoginView(TokenObtainPairView):
 class GetInfoView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(responses=UserInfoSerializer)
     def get(self, request):
         user = request.user
         user_data = {
@@ -161,152 +292,3 @@ class GetRoutersView(generics.GenericAPIView):
         # cache.set('routers', routers, timeout=3600)
         return Response({"code": 200, "msg": "操作成功", "data": routers})
 
-
-class BaseViewMixin:
-    # 通用响应封装
-    def ok(self, msg='操作成功'):
-        return Response({'code': 200, 'msg': msg})
-
-    def error(self, msg='操作失败'):
-        return Response({'code': 400, 'msg': msg})
-    
-    def data(self, data, msg='操作成功'):
-        return Response({'code': 200, 'msg': msg, 'data': data})
-
-    def not_found(self, msg='未找到'):
-        return Response({'code': 404, 'msg': msg})
-    
-    def raw_response(self, data):
-        return Response(data)
-
-
-class BaseViewSet(BaseViewMixin,viewsets.ModelViewSet):
-    required_roles = None
-    # 兼容前端 PUT /xxx（集合更新）通用支持
-    update_body_serializer_class = None  # 子类设置：用于校验请求体
-    update_body_id_field = 'id'          # 子类设置：请求体中的主键字段名，如 menuId/deptId/roleId/configId
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        model = qs.model
-        if hasattr(model, 'del_flag'):
-            try:
-                qs = qs.filter(del_flag='0')
-            except Exception:
-                pass
-        return qs
-    
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return self.raw_response({'total': len(serializer.data), 'rows': serializer.data, 'code': 200, 'msg': '操作成功'})
-
-    @audit_log
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        return self.ok()
-
-    @audit_log
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return self.ok()
-
-    @audit_log
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if hasattr(instance, 'del_flag'):
-            instance.del_flag = '1'
-            instance.save(update_fields=['del_flag'])
-            return self.ok()
-        return super().destroy(request, *args, **kwargs)
-
-    # 统一数据详情响应包装
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        data = self.get_serializer(instance).data
-        return self.data(data)
-
-    @audit_log
-    def partial_update(self, request, *args, **kwargs):
-        kwargs['partial'] = True
-        return self.update(request, *args, **kwargs)
-
-    def perform_create(self, serializer):
-        user = getattr(self.request, 'user', None)
-        kwargs = {}
-        Model = getattr(serializer.Meta, 'model', None)
-        if hasattr(Model, 'create_by') and user and getattr(user, 'username', None):
-            kwargs['create_by'] = user.username
-        if hasattr(Model, 'update_by') and user and getattr(user, 'username', None):
-            kwargs['update_by'] = user.username
-
-        instance = None
-        try:
-            data = getattr(serializer, 'validated_data', {})
-            if Model is not None:
-                pk_name = Model._meta.pk.attname
-                lookup = {}
-                if pk_name in data:
-                    lookup[pk_name] = data.get(pk_name)
-                else:
-                    # 尝试使用唯一字段匹配
-                    for f in Model._meta.fields:
-                        if getattr(f, 'unique', False) and f.attname in data:
-                            lookup[f.attname] = data.get(f.attname)
-                            break
-                if lookup:
-                    instance = Model.objects.filter(**lookup).first()
-        except Exception:
-            instance = None
-
-        if instance is not None:
-            serializer.instance = instance
-            if hasattr(Model, 'del_flag'):
-                kwargs['del_flag'] = '0'
-            serializer.save(**kwargs)
-        else:
-            serializer.save(**kwargs)
-
-    def perform_update(self, serializer):
-        user = getattr(self.request, 'user', None)
-        kwargs = {}
-        if hasattr(serializer.Meta.model, 'update_by') and user and getattr(user, 'username', None):
-            kwargs['update_by'] = user.username
-        serializer.save(**kwargs)
-
-    @action(detail=False, methods=['get'],url_path='list')
-    def model_list(self, request, *args, **kwargs):
-        return self.list(request, *args, **kwargs)
-
-    # 兼容前端 PUT /xxx（不带主键）更新：子类设置 update_body_serializer_class + update_body_id_field 即可复用
-    def update_by_body(self, request, *args, **kwargs):
-        vcls = getattr(self, 'update_body_serializer_class', None)
-        id_field = getattr(self, 'update_body_id_field', 'id')
-        if not vcls:
-            return Response({'code': 404, 'msg': '未实现集合更新'}, status=status.HTTP_404_NOT_FOUND)
-        v = vcls(data=request.data)
-        v.is_valid(raise_exception=True)
-        obj_id = v.validated_data.get(id_field)
-        Model = self.get_queryset().model
-        try:
-            if hasattr(Model, 'del_flag'):
-                instance = Model.objects.get(pk=obj_id, del_flag='0')
-            else:
-                instance = Model.objects.get(pk=obj_id)
-        except Model.DoesNotExist:
-            # return Response({'code': 404, 'msg': '资源不存在'}, status=status.HTTP_404_NOT_FOUND)
-            return self.not_found(msg=f'资源不存在，id={obj_id}')
-        kwargs['partial'] = False
-        self.kwargs.update(kwargs)
-        self.get_object = lambda: instance
-        return self.update(request, *args, **kwargs)

@@ -4,19 +4,20 @@ from rest_framework.response import Response
 from django.db.models import Q
 
 from rest_framework.permissions import IsAuthenticated
+from collections import OrderedDict
+
 from .core import BaseViewSet
 from ..permission import HasRolePermission
 from ..common import audit_log
-from apps.common.mixins import ExportExcelMixin
-from collections import OrderedDict
+from ..models import User, Dept, Role, UserRole, Post, UserPost
 from ..serializers import (
     UserSerializer, DeptSerializer, UserProfileSerializer, RoleSerializer, PostSerializer,
     UserQuerySerializer, ResetPwdSerializer, ChangeStatusSerializer,
     UpdatePwdSerializer, AvatarSerializer, AuthRoleAssignSerializer, AuthRoleQuerySerializer,
     UserUpdateSerializer
 )
-from ..models import User, Dept, Role, UserRole, Post, UserPost
 
+from apps.common.mixins import ExportExcelMixin
 from drf_spectacular.utils import extend_schema
 
 class UserViewSet(BaseViewSet, ExportExcelMixin):

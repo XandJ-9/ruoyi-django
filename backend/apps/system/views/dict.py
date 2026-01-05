@@ -173,8 +173,9 @@ class DictDataViewSet(BaseViewSet, ExportExcelMixin):
         cache_key = f'dict_data_by_type:{dict_type}'
         cached = cache.get(cache_key)
         if cached is not None:
-            return Response({'code': 200, 'msg': '操作成功', 'data': cached})
+            return Response({'code': 200, 'msg': '获取缓存数据', 'data': cached})
         qs = DictData.objects.filter(dict_type=dict_type, status='0', del_flag='0').order_by('dict_sort', 'dict_label')
         serializer = self.get_serializer(qs, many=True)
         cache.set(cache_key, serializer.data, timeout=3600)
         return Response({'code': 200, 'msg': '操作成功', 'data': serializer.data})
+        
